@@ -4,11 +4,17 @@ wellbeing-mcp — FastMCP server.
 Exposes tools for logging mood, weight, meals, and workouts,
 plus a wellbeing://current resource that surfaces today's state
 as background context in every Claude conversation.
+
+All persistent data lives in markdown daily notes (daily.py).
+SQLite is used only for active gym session state (db.py).
 """
 
 from fastmcp import FastMCP
 from typing import Optional
 from . import db
+from . import daily
+from . import vault
+from . import workout as wk
 
 mcp = FastMCP(
     "wellbeing",
@@ -23,19 +29,19 @@ db.init_db()
 
 
 # ---------------------------------------------------------------------------
-# Resource: auto-loaded context
+# Resources: auto-loaded context
 # ---------------------------------------------------------------------------
 
 @mcp.resource("wellbeing://current")
 def current_state() -> str:
     """Today's wellbeing snapshot — weight, workouts, calories, mood."""
-    return db.build_current_snapshot()
+    profile = db.get_profile()
+    return daily.build_current_snapshot(profile)
 
 
 @mcp.resource("wellbeing://profile")
 def user_profile() -> str:
     """User background: history, goals, injury status, coaching notes."""
-    import json
     profile = db.get_profile()
     lines = [
         f"Name: {profile.get('name', 'Doug')}",
@@ -56,7 +62,7 @@ def user_profile() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tools: logging
+# Tools: daily logging
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
@@ -66,7 +72,7 @@ def log_mood(
     note: str = "",
 ) -> str:
     """
-    Log current mood and/or energy level.
+    Log current mood and/or energy level to today's daily note.
 
     Args:
         score:  Mood score 1–10 (1 = terrible, 10 = great). Optional.
@@ -75,31 +81,18 @@ def log_mood(
     """
     if score is None and energy is None and not note:
         return "Nothing logged — provide at least a score, energy, or note."
-    db.log_mood(score, energy, note)
-    parts = []
-    if score is not None:
-        parts.append(f"mood {score}/10")
-    if energy is not None:
-        parts.append(f"energy {energy}/10")
-    if note:
-        parts.append(f'"{note}"')
-    return f"Logged: {', '.join(parts)}"
+    return daily.log_mood(score, energy, note)
 
 
 @mcp.tool()
-def log_weight(weight_lbs: float, note: str = "") -> str:
+def log_weight(weight_lbs: float) -> str:
     """
-    Log a weight measurement in pounds.
+    Log a weight measurement in pounds to today's daily note.
 
     Args:
         weight_lbs: Weight in lbs.
-        note:       Optional note (e.g. "morning, pre-coffee").
     """
-    db.log_weight(weight_lbs, source="manual", note=note)
-    profile = db.get_profile()
-    goal = profile.get("goal_weight_lbs", 250)
-    to_go = round(weight_lbs - goal, 1)
-    return f"Logged {weight_lbs} lbs. {to_go} lbs to goal ({goal})."
+    return daily.log_weight(weight_lbs)
 
 
 @mcp.tool()
@@ -107,58 +100,285 @@ def log_meal(
     description: str,
     estimated_calories: Optional[int] = None,
     estimated_protein_g: Optional[int] = None,
-    note: str = "",
 ) -> str:
     """
-    Log a meal or snack. Describe it naturally — calories will be estimated if not provided.
+    Log a meal or snack to today's daily note. Describe it naturally.
+    If calories are not provided, they will be estimated from the description.
 
     Args:
         description:         What you ate, e.g. "grilled chicken breast, rice, salad".
-        estimated_calories:  Calorie estimate. If omitted, will be estimated from description.
+        estimated_calories:  Calorie estimate. If omitted, estimated from description.
         estimated_protein_g: Protein estimate in grams. Optional.
-        note:                Any context, e.g. "was still hungry after".
     """
-    # Rough estimation if not provided — good enough for trend tracking
     if estimated_calories is None:
         estimated_calories = _estimate_calories(description)
+    return daily.log_meal(description, estimated_calories, estimated_protein_g)
 
-    db.log_meal(description, estimated_calories, estimated_protein_g, note)
 
-    today_total = db.get_calories_today()
-    profile = db.get_profile()
-    target = profile.get("calorie_target", 2100)
-    remaining = target - today_total
+# ---------------------------------------------------------------------------
+# Tools: gym session (interactive)
+# ---------------------------------------------------------------------------
 
-    result = f"Logged: {description} (~{estimated_calories} cal)"
-    result += f"\nToday: {today_total} / {target} cal | {remaining} remaining"
-    if remaining < 0:
-        result += f" (over by {abs(remaining)})"
-    return result
+@mcp.tool()
+def get_workout_plan(shoulder_ok: bool = True) -> str:
+    """
+    Get today's recommended workout plan with exercises.
+    Returns a formatted plan ready for gym-floor use.
+
+    Args:
+        shoulder_ok: Set False if right shoulder is bothering you today.
+    """
+    session_type, rationale = wk.determine_session_type()
+    plan = wk.build_workout_plan(session_type, shoulder_ok=shoulder_ok)
+    days_since = wk.get_days_since_last_session()
+    return wk.format_plan_for_conversation(plan, rationale, days_since)
 
 
 @mcp.tool()
-def log_workout(
-    workout_type: str,
-    duration_minutes: Optional[int] = None,
-    calories_burned: Optional[int] = None,
+def start_gym_session(session_type: str = "") -> str:
+    """
+    Start a new gym session. Returns the session ID to use when logging exercises.
+
+    Args:
+        session_type: Optional override — "A-push", "B-pull-lower", or "cardio".
+                      If omitted, the recommended type is used automatically.
+    """
+    if not session_type:
+        session_type, _ = wk.determine_session_type()
+    session_id = db.start_gym_session(session_type)
+    return f"Session started (id={session_id}, type={session_type}). Log each exercise as you go."
+
+
+@mcp.tool()
+def log_exercise_set(
+    name: str,
+    set_number: Optional[int] = None,
+    reps: Optional[int] = None,
+    weight_lbs: Optional[float] = None,
+    rpe: Optional[int] = None,
+    modified: bool = False,
     note: str = "",
 ) -> str:
     """
-    Log a completed workout.
+    Log one set of an exercise during an active gym session.
 
     Args:
-        workout_type:     Type of workout, e.g. "elliptical", "weights", "walk".
-        duration_minutes: How long in minutes. Optional.
-        calories_burned:  Active calories burned. Optional.
-        note:             Any notes, e.g. "shoulder felt fine", "took it easy".
+        name:       Exercise name, e.g. "Leg Press" or "Elliptical".
+        set_number: Which set this is (1, 2, 3...). Optional.
+        reps:       Reps completed. Optional (omit for timed exercises).
+        weight_lbs: Weight used in lbs. Optional.
+        rpe:        Rate of perceived exertion 1–10. Optional.
+        modified:   True if substituted/modified from the plan. Default False.
+        note:       Any short note, e.g. "felt easy", "stopped early". Optional.
     """
-    db.log_workout(workout_type, duration_minutes, calories_burned, note=note)
-    parts = [workout_type]
-    if duration_minutes:
-        parts.append(f"{duration_minutes} min")
-    if calories_burned:
-        parts.append(f"{calories_burned} cal burned")
-    return f"Logged workout: {', '.join(parts)}."
+    session = db.get_active_session()
+    if not session:
+        return "No active session. Call start_gym_session first."
+    db.log_exercise(
+        session["id"], name, set_number, reps, weight_lbs, rpe, modified, note
+    )
+    parts = [name]
+    if set_number:
+        parts.append(f"set {set_number}")
+    if reps:
+        parts.append(f"{reps} reps")
+    if weight_lbs:
+        parts.append(f"@ {weight_lbs} lbs")
+    if rpe:
+        parts.append(f"RPE {rpe}")
+    return f"Logged: {' | '.join(parts)}"
+
+
+@mcp.tool()
+def finish_gym_session(notes: str = "") -> str:
+    """
+    Finish the active gym session, write a workout log to the vault,
+    and update today's daily note with the workout.
+
+    Args:
+        notes: Optional session notes, e.g. "shoulder felt fine", "cut short".
+    """
+    session = db.get_active_session()
+    if not session:
+        return "No active session found."
+
+    session_id = session["id"]
+    session_type = session.get("session_type", "unknown")
+
+    # Close out the session in SQLite
+    result = db.finish_gym_session(session_id, notes=notes)
+    total_minutes = result.get("total_minutes")
+
+    # Get exercises and write vault log
+    exercises = db.get_session_exercises(session_id)
+    vault_path = vault.write_workout_log(
+        session_type=session_type,
+        exercises=exercises,
+        total_minutes=total_minutes,
+        notes=notes,
+    )
+
+    # Update today's daily note
+    daily.log_workout_to_daily(session_type, total_minutes)
+
+    summary = wk.summarize_session(session_id)
+    return f"{summary}\nVault: {vault_path}"
+
+
+@mcp.tool()
+def get_active_session_status() -> str:
+    """Check if there's an active gym session and what's been logged so far."""
+    session = db.get_active_session()
+    if not session:
+        return "No active session."
+
+    exercises = db.get_session_exercises(session["id"])
+    lines = [
+        f"Active session: {session.get('session_type', 'unknown')} (id={session['id']})",
+        f"Started: {session.get('started_at', '?')}",
+        f"Exercises logged: {len(exercises)}",
+    ]
+    if exercises:
+        for ex in exercises[-5:]:  # last 5 entries
+            parts = [ex["name"]]
+            if ex.get("set_number"):
+                parts.append(f"set {ex['set_number']}")
+            if ex.get("reps"):
+                parts.append(f"{ex['reps']} reps")
+            if ex.get("weight_lbs"):
+                parts.append(f"@ {ex['weight_lbs']} lbs")
+            lines.append("  " + " | ".join(parts))
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Tools: vault / journal
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_routine() -> str:
+    """Read the current workout routine from the vault."""
+    return vault.read_routine()
+
+
+@mcp.tool()
+def update_routine(content: str) -> str:
+    """
+    Write or replace the current workout routine in the vault.
+
+    Args:
+        content: Full markdown content of the routine note.
+    """
+    path = vault.write_routine(content)
+    return f"Routine updated: {path}"
+
+
+@mcp.tool()
+def write_weekly_review(
+    highlights: str = "",
+    challenges: str = "",
+    next_week_focus: str = "",
+) -> str:
+    """
+    Write this week's well-being journal entry to the vault.
+
+    Args:
+        highlights:      What went well this week.
+        challenges:      What was hard or didn't go as planned.
+        next_week_focus: One or two priorities for next week.
+    """
+    from datetime import date, timedelta
+
+    weight_entries = daily.get_weight_trend(days=7)
+    week_workouts = daily.get_workouts_this_week()
+
+    # Average calories for the week
+    cal_values = []
+    today = date.today()
+    for i in range(7):
+        d = today - timedelta(days=i)
+        fm, _ = daily.read_daily(d)
+        cal = fm.get("calories_total", 0)
+        if cal:
+            cal_values.append(cal)
+    avg_cal = int(sum(cal_values) / len(cal_values)) if cal_values else None
+
+    # Average mood
+    mood_values = []
+    for i in range(7):
+        d = today - timedelta(days=i)
+        fm, _ = daily.read_daily(d)
+        if fm.get("mood"):
+            mood_values.append(fm["mood"])
+    avg_mood = round(sum(mood_values) / len(mood_values), 1) if mood_values else None
+
+    path = vault.write_weekly_review(
+        weight_entries=weight_entries,
+        workout_count=len(week_workouts),
+        avg_calories=avg_cal,
+        mood_avg=avg_mood,
+        highlights=highlights,
+        challenges=challenges,
+        next_week_focus=next_week_focus,
+    )
+    return f"Weekly review written: {path}"
+
+
+@mcp.tool()
+def write_monthly_review(
+    year: int,
+    month: int,
+    summary: str = "",
+    wins: str = "",
+    focus_next_month: str = "",
+) -> str:
+    """
+    Write a monthly well-being review to the vault.
+
+    Args:
+        year:             Year, e.g. 2026.
+        month:            Month number 1–12.
+        summary:          Brief narrative of the month.
+        wins:             Notable wins or achievements.
+        focus_next_month: What to prioritize next month.
+    """
+    from datetime import date, timedelta
+    from calendar import monthrange
+
+    # First and last weight entries in the month
+    _, last_day = monthrange(year, month)
+    first_date = date(year, month, 1)
+    last_date = date(year, month, last_day)
+
+    weight_start = None
+    weight_end = None
+    for i in range((last_date - first_date).days + 1):
+        d = first_date + timedelta(days=i)
+        fm, _ = daily.read_daily(d)
+        if fm.get("weight_lbs"):
+            if weight_start is None:
+                weight_start = fm["weight_lbs"]
+            weight_end = fm["weight_lbs"]
+
+    # Count workouts in month
+    workout_count = 0
+    for i in range((last_date - first_date).days + 1):
+        d = first_date + timedelta(days=i)
+        fm, _ = daily.read_daily(d)
+        if fm.get("workout_type"):
+            workout_count += 1
+
+    path = vault.write_monthly_review(
+        year=year,
+        month=month,
+        weight_start=weight_start,
+        weight_end=weight_end,
+        total_workouts=workout_count,
+        summary=summary,
+        wins=wins,
+        focus_next_month=focus_next_month,
+    )
+    return f"Monthly review written: {path}"
 
 
 # ---------------------------------------------------------------------------
@@ -168,30 +388,27 @@ def log_workout(
 @mcp.tool()
 def get_today_summary() -> str:
     """Get today's full wellbeing snapshot."""
-    return db.build_current_snapshot()
+    profile = db.get_profile()
+    return daily.build_current_snapshot(profile)
 
 
 @mcp.tool()
 def get_weekly_summary() -> str:
     """Get a summary of the past 7 days: workouts, weight trend, average calories."""
-    from datetime import date, timedelta
-
-    workouts = db.get_workouts_this_week()
-    weight_trend = db.get_weight_trend(days=7)
+    week_workouts = daily.get_workouts_this_week()
+    weight_trend = daily.get_weight_trend(days=7)
 
     workout_lines = []
-    for w in workouts:
-        parts = [f"{w['workout_date']}: {w['type']}"]
-        if w["duration_minutes"]:
-            parts.append(f"{w['duration_minutes']}min")
-        if w["calories_burned"]:
-            parts.append(f"{w['calories_burned']}cal")
+    for w in week_workouts:
+        parts = [f"{w['date']}: {w['workout_type']}"]
+        if w.get("workout_minutes"):
+            parts.append(f"{w['workout_minutes']}min")
         workout_lines.append(" | ".join(parts))
 
-    weight_lines = [f"{w['logged_at'][:10]}: {w['weight_lbs']} lbs" for w in weight_trend]
+    weight_lines = [f"{w['date']}: {w['weight_lbs']} lbs" for w in weight_trend]
 
     lines = ["=== Past 7 Days ===", ""]
-    lines.append(f"Workouts ({len(workouts)}):")
+    lines.append(f"Workouts ({len(week_workouts)}):")
     lines.extend(workout_lines if workout_lines else ["  none logged"])
     lines.append("")
     lines.append(f"Weight ({len(weight_trend)} entries):")
@@ -208,14 +425,13 @@ def get_weekly_summary() -> str:
 @mcp.tool()
 def update_profile_field(field: str, value: str) -> str:
     """
-    Update a single field in the user profile.
+    Update a single field in the user profile (stored in ~/.local/share/wellbeing-mcp/profile.json).
 
     Args:
         field: Profile key, e.g. "goal_weight_lbs", "calorie_target", "injury".
         value: New value as a string (numbers will be converted automatically).
     """
     profile = db.get_profile()
-    # Coerce numeric fields
     numeric_fields = {"goal_weight_lbs", "calorie_target", "age", "current_weight_estimate_lbs"}
     if field in numeric_fields:
         try:
@@ -233,7 +449,7 @@ def update_profile_field(field: str, value: str) -> str:
 
 def _estimate_calories(description: str) -> int:
     """
-    Very rough calorie estimation from natural language description.
+    Rough calorie estimation from natural language description.
     Good enough for trend tracking — not a substitute for precise logging.
     """
     desc = description.lower()
@@ -265,11 +481,9 @@ def _estimate_calories(description: str) -> int:
             total += cal
             matched = True
 
-    # If nothing matched, use a generic moderate meal estimate
     if not matched:
         total = 400
 
-    # Cap to reasonable single-meal range
     return min(max(total, 50), 1500)
 
 
