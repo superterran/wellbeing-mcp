@@ -11,8 +11,8 @@ Authentication: Bearer token required on all requests except /healthz.
 Set WELLBEING_API_KEY in the environment (sourced from .env).
 """
 
-import asyncio
 import os
+import uvicorn
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -56,16 +56,8 @@ if __name__ == "__main__":
             "Add it to repos/wellbeing-mcp/.env: WELLBEING_API_KEY=your-secret-key"
         )
 
-    # Inject auth middleware into the FastMCP app
-    mcp.http_app.add_middleware(BearerAuthMiddleware, api_key=api_key)
+    # Build the Starlette app, add auth middleware, run with uvicorn
+    app = mcp.http_app(transport="streamable-http", path="/mcp")
+    app.add_middleware(BearerAuthMiddleware, api_key=api_key)
 
-    asyncio.run(
-        mcp.run_http_async(
-            transport="streamable-http",
-            host="127.0.0.1",
-            port=8766,
-            path="/mcp",
-            log_level="info",
-            show_banner=False,
-        )
-    )
+    uvicorn.run(app, host="127.0.0.1", port=8766, log_level="info")
