@@ -6,6 +6,7 @@ __pycache__/
 .ruff_cache/
 dist/
 *.egg-info/
-# Never commit the live database or user profile
+# Never commit the live database, user profile, or secrets
 *.db
 profile.json
+.env
