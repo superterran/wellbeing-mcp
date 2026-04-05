@@ -57,7 +57,8 @@ if __name__ == "__main__":
         )
 
     # Build the Starlette app, add auth middleware, run with uvicorn
-    app = mcp.http_app(transport="streamable-http", path="/mcp")
+    # SSE transport for broad client compatibility (Claude.ai, Claude CLI -t sse)
+    app = mcp.http_app(transport="sse", path="/sse")
     app.add_middleware(BearerAuthMiddleware, api_key=api_key)
 
     uvicorn.run(app, host="127.0.0.1", port=8766, log_level="info")
