@@ -111,6 +111,24 @@ def _render(fm: dict, personal_notes: str = "") -> str:
     else:
         workout_body = "_not logged_"
 
+    # Apple Health section
+    ah_parts = []
+    if fm.get("resting_heart_rate"):
+        ah_parts.append(f"RHR {fm['resting_heart_rate']} bpm")
+    if fm.get("hrv"):
+        ah_parts.append(f"HRV {fm['hrv']} ms")
+    if fm.get("steps"):
+        ah_parts.append(f"{fm['steps']:,} steps")
+    if fm.get("active_calories"):
+        ah_parts.append(f"{fm['active_calories']} active cal")
+    if fm.get("vo2_max"):
+        ah_parts.append(f"VO₂max {fm['vo2_max']}")
+    if fm.get("blood_oxygen"):
+        ah_parts.append(f"SpO₂ {fm['blood_oxygen']}%")
+    if fm.get("cardio_recovery"):
+        ah_parts.append(f"cardio recovery {fm['cardio_recovery']}")
+    apple_health_body = " | ".join(ah_parts) if ah_parts else "_no data_"
+
     fm_text = yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     body = f"""# Well-being — {day_str}
@@ -130,6 +148,10 @@ def _render(fm: dict, personal_notes: str = "") -> str:
 ## Workout
 
 {workout_body}
+
+## Apple Health
+
+{apple_health_body}
 
 """
 
@@ -170,6 +192,14 @@ def _default_fm(d: date) -> dict:
         "workout_type": "",
         "workout_minutes": None,
         "meals": [],
+        # Apple Health metrics
+        "resting_heart_rate": None,
+        "hrv": None,
+        "steps": None,
+        "active_calories": None,
+        "vo2_max": None,
+        "blood_oxygen": None,
+        "cardio_recovery": None,
         "tags": ["well-being", "daily"],
     }
 
@@ -262,6 +292,36 @@ def log_workout_to_daily(
     fm["workout_type"] = workout_type
     if duration_minutes is not None:
         fm["workout_minutes"] = duration_minutes
+    _save(d, fm, notes)
+
+
+def log_apple_health_metrics(
+    d: Optional[date] = None,
+    resting_heart_rate: Optional[float] = None,
+    hrv: Optional[float] = None,
+    steps: Optional[int] = None,
+    active_calories: Optional[int] = None,
+    vo2_max: Optional[float] = None,
+    blood_oxygen: Optional[float] = None,
+    cardio_recovery: Optional[float] = None,
+) -> None:
+    """Write Apple Health metrics to the daily note for the given date."""
+    d = d or date.today()
+    fm, notes = _load_or_create(d)
+    if resting_heart_rate is not None:
+        fm["resting_heart_rate"] = round(resting_heart_rate, 1)
+    if hrv is not None:
+        fm["hrv"] = round(hrv, 1)
+    if steps is not None:
+        fm["steps"] = int(steps)
+    if active_calories is not None:
+        fm["active_calories"] = int(active_calories)
+    if vo2_max is not None:
+        fm["vo2_max"] = round(vo2_max, 1)
+    if blood_oxygen is not None:
+        fm["blood_oxygen"] = round(blood_oxygen, 1)
+    if cardio_recovery is not None:
+        fm["cardio_recovery"] = round(cardio_recovery, 1)
     _save(d, fm, notes)
 
 
@@ -399,11 +459,27 @@ def build_current_snapshot(profile: dict) -> str:
     else:
         mood_line = "not logged"
 
+    # Apple Health — pull from today's note
+    fm_today, _ = read_daily(date.today())
+    ah_parts = []
+    if fm_today.get("resting_heart_rate"):
+        ah_parts.append(f"RHR {fm_today['resting_heart_rate']} bpm")
+    if fm_today.get("hrv"):
+        ah_parts.append(f"HRV {fm_today['hrv']} ms")
+    if fm_today.get("steps"):
+        ah_parts.append(f"{fm_today['steps']:,} steps")
+    if fm_today.get("active_calories"):
+        ah_parts.append(f"{fm_today['active_calories']} active cal")
+    if fm_today.get("vo2_max"):
+        ah_parts.append(f"VO₂max {fm_today['vo2_max']}")
+    ah_line = " | ".join(ah_parts) if ah_parts else "no data today"
+
     return f"""[Wellbeing — {today}]
 Weight:    {weight_line}
 Workouts:  {workout_line}
 Calories:  {cal_line}
 Mood:      {mood_line}
+Health:    {ah_line}
 Injury:    Right shoulder tendon — mostly healed, avoid heavy pressing
 Context:   Returning after ~4 weeks off (injury + illness). Elliptical is priority.
 Goal:      {goal} lbs | {target} cal/day target"""
