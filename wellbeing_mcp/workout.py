@@ -2,12 +2,83 @@
 workout.py — workout planning and gym session logic.
 
 Determines today's session type (A/B), applies shoulder modifications,
-and formats the plan conversationally for gym-floor use.
+handles equipment availability substitutions, and formats plans
+conversationally for gym-floor use.
 """
 
 from datetime import date, datetime
 
 from . import db
+
+# ---------------------------------------------------------------------------
+# Equipment registry
+# ---------------------------------------------------------------------------
+
+# Maps exercise name (lowercase) → equipment key required
+EQUIPMENT_REQUIRED: dict[str, str | None] = {
+    "elliptical": "elliptical",
+    "assisted pull-up machine": "pull_up_machine",
+    "lat pulldown machine": "lat_pulldown",
+    "single-arm dumbbell row": "dumbbells",
+    "leg press": "leg_press",
+    "machine-assisted squats": "smith_machine",
+    "cable row (seated)": "cable_machine",
+    "reverse pec deck": "pec_deck",
+    "face pull (cable)": "cable_machine",
+    "stair machine": "stair_machine",
+    "rowing machine": "rowing_machine",
+    "machine bench press": "chest_press_machine",
+    "pec deck": "pec_deck",
+    "lateral raise": "dumbbells",
+    "goblet squat": "dumbbells",
+    "pushups (knees)": None,   # bodyweight
+    "situps / crunches": None,
+    "plank": None,
+}
+
+# Equipment substitutions: exercise name (lowercase) → list of (substitute_name, rationale)
+EQUIPMENT_SUBS: dict[str, list[tuple[str, str]]] = {
+    "assisted pull-up machine": [
+        ("Lat Pulldown Machine", "Same lat engagement, no assist needed — adjust weight"),
+        ("Single-Arm Dumbbell Row", "Good fallback pull if pulldown is also busy"),
+    ],
+    "lat pulldown machine": [
+        ("Assisted Pull-Up Machine", "Same movement pattern, assisted"),
+        ("Single-Arm Dumbbell Row", "Unilateral pull, effective substitute"),
+    ],
+    "leg press": [
+        ("Machine-Assisted Squats", "Similar quad load — drop weight, focus on depth"),
+        ("Goblet Squat", "Dumbbell, no machine needed. 3×15"),
+    ],
+    "machine-assisted squats": [
+        ("Goblet Squat", "Dumbbell, anywhere. 3×15"),
+        ("Leg Press", "Swap order if leg press is free"),
+    ],
+    "cable row (seated)": [
+        ("Single-Arm Dumbbell Row", "Same pull pattern, no cable needed"),
+        ("Resistance Band Row", "If dumbbells are also unavailable"),
+    ],
+    "face pull (cable)": [
+        ("Reverse Pec Deck", "Rear delt focus, no cable"),
+        ("Band Pull-Apart", "Light band, shoulder safe"),
+    ],
+    "reverse pec deck": [
+        ("Face Pull (cable)", "Rear delt, cable version"),
+        ("Band Pull-Apart", "Shoulder safe bodyweight option"),
+    ],
+    "stair machine": [
+        ("Incline Treadmill", "10–15% grade, brisk walk, 10–15 min"),
+        ("Extra Elliptical", "Extend elliptical time by 10 min instead"),
+    ],
+    "rowing machine": [
+        ("Elliptical", "Extend elliptical time if rowing machine is taken"),
+        ("Stair Machine", "Good cardio swap"),
+    ],
+    "elliptical": [
+        ("Rowing Machine", "Full-body cardio, easier on joints"),
+        ("Stair Machine", "Higher intensity, good substitute"),
+    ],
+}
 
 # ---------------------------------------------------------------------------
 # Routine definitions
@@ -218,3 +289,133 @@ def summarize_session(session_id: int) -> str:
     if modified:
         lines.append(f"Modified exercises (shoulder): {len(modified)}")
     return " | ".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Equipment-aware planning
+# ---------------------------------------------------------------------------
+
+def apply_equipment_mods(exercises: list[dict], unavailable: list[str]) -> list[dict]:
+    """
+    Substitute or skip exercises whose required equipment is listed as unavailable.
+    unavailable is a list of plain-name equipment strings (case-insensitive),
+    e.g. ["cable machine", "stair machine"].
+    """
+    unavail_lower = {u.lower() for u in unavailable}
+    result = []
+    for ex in exercises:
+        name_lower = ex["name"].lower()
+        required = EQUIPMENT_REQUIRED.get(name_lower)
+        # Normalise equipment key for comparison (underscores → spaces, vice versa)
+        if required and (required in unavail_lower or required.replace("_", " ") in unavail_lower):
+            subs = EQUIPMENT_SUBS.get(name_lower, [])
+            if subs:
+                sub_name, sub_note = subs[0]
+                result.append({
+                    **ex,
+                    "name": sub_name,
+                    "note": f"[SUB — {ex['name']} unavailable] {sub_note}",
+                    "modified": True,
+                })
+            else:
+                result.append({
+                    **ex,
+                    "note": f"⚠️ SKIPPED — {ex['name']} equipment unavailable. {ex.get('note', '')}",
+                    "modified": True,
+                    "skip": True,
+                })
+        else:
+            result.append(ex)
+    return result
+
+
+def suggest_substitute(exercise_name: str) -> str:
+    """
+    Return substitute options for a given exercise, formatted for conversation.
+    """
+    subs = EQUIPMENT_SUBS.get(exercise_name.lower())
+    if not subs:
+        return f"No specific substitutes on file for {exercise_name}. Ask the coach."
+    lines = [f"Substitutes for **{exercise_name}**:"]
+    for i, (name, rationale) in enumerate(subs, 1):
+        lines.append(f"{i}. **{name}** — {rationale}")
+    return "\n".join(lines)
+
+
+def get_next_exercise(session_id: int, session_type: str, shoulder_ok: bool = True) -> str:
+    """
+    Return the next exercise not yet started in this session, based on the plan.
+    Compares logged exercise names against the planned order.
+    """
+    template = ROUTINE.get(session_type, ROUTINE["cardio"])
+    planned = _apply_shoulder_mods(template["exercises"], shoulder_ok)
+    planned_names = [ex["name"].lower() for ex in planned if not ex.get("skip")]
+
+    logged = db.get_session_exercises(session_id)
+    logged_names = {ex["name"].lower() for ex in logged}
+
+    for ex in planned:
+        if ex.get("skip"):
+            continue
+        if ex["name"].lower() not in logged_names:
+            sets_str = f"{ex['sets']}×" if ex.get("sets") and ex["sets"] > 1 else ""
+            reps_str = str(ex.get("reps", "")) if ex.get("reps") else "timed"
+            weight_str = f" @ {ex['weight']}" if ex.get("weight") else ""
+            lines = [f"**Next: {ex['name']}**"]
+            if sets_str or reps_str:
+                lines.append(f"{sets_str}{reps_str}{weight_str}")
+            if ex.get("note"):
+                lines.append(f"_{ex['note']}_")
+            remaining = sum(1 for n in planned_names if n not in logged_names)
+            lines.append(f"({remaining} exercise{'s' if remaining != 1 else ''} left in plan)")
+            return "\n".join(lines)
+
+    return "All planned exercises logged. Nice work — ready to finish the session?"
+
+
+def format_session_status(session_id: int, session_type: str, shoulder_ok: bool = True) -> str:
+    """
+    Return a conversational summary of where we are in the current session.
+    """
+    from datetime import datetime as dt
+
+    session = None
+    with db.get_db() as conn:
+        row = conn.execute("SELECT * FROM gym_session WHERE id = ?", (session_id,)).fetchone()
+        if row:
+            session = dict(row)
+
+    if not session:
+        return "No active session."
+
+    exercises = db.get_session_exercises(session_id)
+    started = session.get("started_at", "")
+    elapsed = ""
+    if started:
+        try:
+            elapsed_min = int((dt.now() - dt.fromisoformat(started)).total_seconds() / 60)
+            elapsed = f"{elapsed_min} min in"
+        except (ValueError, TypeError):
+            pass
+
+    template = ROUTINE.get(session_type, ROUTINE["cardio"])
+    planned = _apply_shoulder_mods(template["exercises"], shoulder_ok)
+    total = sum(1 for ex in planned if not ex.get("skip"))
+    done_names = {ex["name"].lower() for ex in exercises}
+    done = sum(1 for ex in planned if not ex.get("skip") and ex["name"].lower() in done_names)
+
+    lines = [
+        f"**{template['label']}** | {elapsed}",
+        f"Progress: {done}/{total} exercises",
+    ]
+    if exercises:
+        last = exercises[-1]
+        parts = [last["name"]]
+        if last.get("set_number"):
+            parts.append(f"set {last['set_number']}")
+        if last.get("reps"):
+            parts.append(f"{last['reps']} reps")
+        if last.get("weight_lbs"):
+            parts.append(f"@ {last['weight_lbs']} lbs")
+        lines.append(f"Last logged: {' | '.join(parts)}")
+    return "\n".join(lines)

@@ -18,9 +18,10 @@ from . import workout as wk
 mcp = FastMCP(
     "wellbeing",
     instructions=(
-        "Wellbeing context server. Provides personal health and mood data "
-        "to inform conversation tone and suggestions. Read wellbeing://current "
-        "at the start of each session for today's snapshot."
+        "Wellbeing and coaching server for Doug. "
+        "Always read wellbeing://current at session start for today's snapshot. "
+        "For gym sessions, read wellbeing://gym-session and use the 'coach' prompt. "
+        "Log exercises conversationally as they're reported — don't make the user fill out forms."
     ),
 )
 
@@ -58,6 +59,87 @@ def user_profile() -> str:
         f"Coaching tone: {profile.get('coaching_tone', '')}",
     ]
     return "\n".join(lines)
+
+
+@mcp.resource("wellbeing://gym-session")
+def gym_session_state() -> str:
+    """Live gym session state — active session, exercises logged, what's next."""
+    session = db.get_active_session()
+    if not session:
+        last = db.get_last_gym_session()
+        if last:
+            days = wk.get_days_since_last_session()
+            ago = "today" if days == 0 else f"{days}d ago"
+            return f"No active session. Last: {last.get('session_type', '?')} ({ago})"
+        return "No active session. No previous sessions on record."
+
+    session_id = session["id"]
+    session_type = session.get("session_type", "unknown")
+    profile = db.get_profile()
+    shoulder_ok = "healed" in profile.get("injury", "").lower() or "fine" in profile.get("injury", "").lower()
+    return wk.format_session_status(session_id, session_type, shoulder_ok=shoulder_ok)
+
+
+# ---------------------------------------------------------------------------
+# Prompts: coaching persona
+# ---------------------------------------------------------------------------
+
+@mcp.prompt()
+def coach() -> str:
+    """
+    Activate the gym coaching persona. Use this at the start of any gym or
+    workout conversation to establish tone, context, and session flow.
+    """
+    profile = db.get_profile()
+    snapshot = daily.build_current_snapshot(profile)
+    session = db.get_active_session()
+
+    session_block = ""
+    if session:
+        session_type = session.get("session_type", "unknown")
+        exercises = db.get_session_exercises(session["id"])
+        session_block = (
+            f"\n\nACTIVE SESSION: {session_type} (id={session['id']}), "
+            f"{len(exercises)} exercises logged so far."
+        )
+    else:
+        session_type, rationale = wk.determine_session_type()
+        days_since = wk.get_days_since_last_session()
+        session_block = (
+            f"\n\nNO ACTIVE SESSION. Recommended today: {session_type}. "
+            f"Rationale: {rationale} "
+            f"Days since last session: {days_since}."
+        )
+
+    return f"""You are Doug's personal trainer and coach. Here's everything you need:
+
+## Current State
+{snapshot}
+{session_block}
+
+## Your Role
+- Run gym sessions conversationally. Walk him through exercises one at a time.
+- When he says he's done with something, log it immediately using log_exercise_set — don't ask him to do it.
+- Call start_gym_session at the start if there's no active session.
+- Call get_next_exercise after each logged exercise to know what's up next.
+- During cardio (elliptical, stair machine), keep conversation going. Talk about anything — topics, news, strategy, whatever keeps him moving. Check in on effort every ~10 min.
+- If equipment is unavailable, use suggest_exercise_substitute or set_unavailable_equipment to adjust the plan. Don't just say "that's not available."
+- At the end, call finish_gym_session to write the vault log.
+
+## Tone
+{profile.get('coaching_tone', 'Direct and practical. No cheerleading.')}
+
+## Injury Awareness
+{profile.get('injury', 'Right shoulder — check before any pressing movement.')}
+Current status: mostly healed, avoid heavy pressing. All pulling and lower body is fine.
+
+## Rules
+- Never repeat the plan back in full. Just tell him the next exercise.
+- If he's on cardio, engage him — silence is fine but conversation is better.
+- Log first, talk after. Don't make him wait while you format things.
+- Notice effort and RPE from how he describes sets. Log rpe if he says "easy", "hard", "felt heavy", etc.
+- When in doubt, ask one short question, not three.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +330,67 @@ def get_active_session_status() -> str:
                 parts.append(f"@ {ex['weight_lbs']} lbs")
             lines.append("  " + " | ".join(parts))
     return "\n".join(lines)
+
+
+@mcp.tool()
+def get_next_exercise() -> str:
+    """
+    Return the next unlogged exercise in the current session's plan.
+    Call this after logging each exercise to know what's up next.
+    """
+    session = db.get_active_session()
+    if not session:
+        return "No active session."
+    profile = db.get_profile()
+    shoulder_ok = "healed" in profile.get("injury", "").lower()
+    return wk.get_next_exercise(session["id"], session.get("session_type", "cardio"), shoulder_ok)
+
+
+@mcp.tool()
+def suggest_exercise_substitute(exercise_name: str) -> str:
+    """
+    Suggest substitutes for an exercise — use when equipment is unavailable or
+    Doug wants to swap something out.
+
+    Args:
+        exercise_name: The exercise to find a substitute for, e.g. "Leg Press".
+    """
+    return wk.suggest_substitute(exercise_name)
+
+
+@mcp.tool()
+def set_unavailable_equipment(unavailable: list[str], shoulder_ok: bool = True) -> str:
+    """
+    Rebuild today's workout plan around unavailable equipment and return
+    the updated plan. Call this when Doug reports what's taken or broken.
+
+    Args:
+        unavailable: List of equipment names that are unavailable,
+                     e.g. ["cable machine", "stair machine"].
+        shoulder_ok: Whether the shoulder is feeling fine today. Default True.
+    """
+    session = db.get_active_session()
+    if not session:
+        # No active session — just return a modified plan preview
+        session_type, rationale = wk.determine_session_type()
+    else:
+        session_type = session.get("session_type", "cardio")
+        rationale = ""
+
+    template = wk.ROUTINE.get(session_type, wk.ROUTINE["cardio"])
+    exercises = wk._apply_shoulder_mods(template["exercises"], shoulder_ok)
+    exercises = wk.apply_equipment_mods(exercises, unavailable)
+
+    plan = {
+        "session_type": session_type,
+        "label": template["label"],
+        "exercises": exercises,
+        "shoulder_modified": not shoulder_ok,
+    }
+    unavail_str = ", ".join(unavailable) if unavailable else "none"
+    result = f"Plan updated — unavailable: {unavail_str}\n\n"
+    result += wk.format_plan_for_conversation(plan, rationale)
+    return result
 
 
 # ---------------------------------------------------------------------------
