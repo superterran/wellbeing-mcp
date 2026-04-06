@@ -1,13 +1,14 @@
 """
-Run the wellbeing MCP server in HTTP/SSE mode for remote Claude instances.
+Run the wellbeing MCP server in HTTP mode for remote Claude instances.
 
 Listens on port 8766. Exposed to the internet via Cloudflare Tunnel
 as wellbeing.superterran.net (see ~/.cloudflared/config.yml).
 
-Remote clients connect via:
-  claude mcp add wellbeing -t http -- https://wellbeing.superterran.net/mcp
+Transport: streamable-http at /mcp
+  Claude.ai remote connector: https://wellbeing.superterran.net/mcp?token=<key>
+  Claude CLI:  claude mcp add wellbeing -t http -- https://wellbeing.superterran.net/mcp
 
-Authentication: Bearer token required on all requests except /healthz.
+Authentication: Bearer token or ?token= query param on all requests.
 Set WELLBEING_API_KEY in the environment (sourced from .env).
 """
 
@@ -27,11 +28,9 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         self.api_key = api_key
 
     async def dispatch(self, request: Request, call_next):
-        # Always allow health check
         if request.url.path == "/healthz":
             return await call_next(request)
 
-        # Check Authorization header or ?token= query param
         auth_header = request.headers.get("Authorization", "")
         token_param = request.query_params.get("token", "")
 
@@ -56,9 +55,7 @@ if __name__ == "__main__":
             "Add it to repos/wellbeing-mcp/.env: WELLBEING_API_KEY=your-secret-key"
         )
 
-    # Build the Starlette app, add auth middleware, run with uvicorn
-    # SSE transport for broad client compatibility (Claude.ai, Claude CLI -t sse)
-    app = mcp.http_app(transport="sse", path="/sse")
+    app = mcp.http_app(transport="streamable-http", path="/mcp")
     app.add_middleware(BearerAuthMiddleware, api_key=api_key)
 
     uvicorn.run(app, host="127.0.0.1", port=8766, log_level="info")
