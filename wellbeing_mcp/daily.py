@@ -14,10 +14,10 @@ Dataview queries in Obsidian can use the frontmatter directly:
 
 from __future__ import annotations
 
-import yaml
-from pathlib import Path
 from datetime import date, datetime, timedelta
-from typing import Optional
+from pathlib import Path
+
+import yaml
 
 VAULT_ROOT = Path.home() / "Documents" / "Cloud Vault"
 DAILY_DIR = VAULT_ROOT / "Well-being" / "Daily"
@@ -169,7 +169,7 @@ def _daily_path(d: date) -> Path:
     return DAILY_DIR / f"{d.isoformat()}.md"
 
 
-def read_daily(d: Optional[date] = None) -> tuple[dict, str]:
+def read_daily(d: date | None = None) -> tuple[dict, str]:
     """Return (frontmatter, personal_notes) for the given day. Empty dict if no note."""
     d = d or date.today()
     path = _daily_path(d)
@@ -220,7 +220,7 @@ def _load_or_create(d: date) -> tuple[dict, str]:
 # Logging helpers
 # ---------------------------------------------------------------------------
 
-def log_weight(weight_lbs: float, d: Optional[date] = None) -> str:
+def log_weight(weight_lbs: float, d: date | None = None) -> str:
     d = d or date.today()
     fm, notes = _load_or_create(d)
     fm["weight_lbs"] = weight_lbs
@@ -230,7 +230,7 @@ def log_weight(weight_lbs: float, d: Optional[date] = None) -> str:
     return f"Logged {weight_lbs} lbs on {d}. {to_go} lbs to goal ({goal})."
 
 
-def log_mood(score: Optional[int], energy: Optional[int], note: str = "", d: Optional[date] = None) -> str:
+def log_mood(score: int | None, energy: int | None, note: str = "", d: date | None = None) -> str:
     d = d or date.today()
     fm, notes = _load_or_create(d)
     if score is not None:
@@ -253,9 +253,9 @@ def log_mood(score: Optional[int], energy: Optional[int], note: str = "", d: Opt
 def log_meal(
     description: str,
     calories: int,
-    protein_g: Optional[int] = None,
-    meal_time: Optional[str] = None,
-    d: Optional[date] = None,
+    protein_g: int | None = None,
+    meal_time: str | None = None,
+    d: date | None = None,
 ) -> str:
     d = d or date.today()
     fm, notes = _load_or_create(d)
@@ -283,8 +283,8 @@ def log_meal(
 
 def log_workout_to_daily(
     workout_type: str,
-    duration_minutes: Optional[int] = None,
-    d: Optional[date] = None,
+    duration_minutes: int | None = None,
+    d: date | None = None,
 ) -> None:
     """Update the daily note's workout fields (called when finishing a gym session)."""
     d = d or date.today()
@@ -296,14 +296,14 @@ def log_workout_to_daily(
 
 
 def log_apple_health_metrics(
-    d: Optional[date] = None,
-    resting_heart_rate: Optional[float] = None,
-    hrv: Optional[float] = None,
-    steps: Optional[int] = None,
-    active_calories: Optional[int] = None,
-    vo2_max: Optional[float] = None,
-    blood_oxygen: Optional[float] = None,
-    cardio_recovery: Optional[float] = None,
+    d: date | None = None,
+    resting_heart_rate: float | None = None,
+    hrv: float | None = None,
+    steps: int | None = None,
+    active_calories: int | None = None,
+    vo2_max: float | None = None,
+    blood_oxygen: float | None = None,
+    cardio_recovery: float | None = None,
 ) -> None:
     """Write Apple Health metrics to the daily note for the given date."""
     d = d or date.today()
@@ -334,7 +334,7 @@ def get_calories_today() -> int:
     return fm.get("calories_total", 0) or 0
 
 
-def get_latest_mood() -> Optional[dict]:
+def get_latest_mood() -> dict | None:
     """Scan back up to 7 days for the most recent mood entry."""
     for i in range(7):
         d = date.today() - timedelta(days=i)
@@ -349,7 +349,7 @@ def get_latest_mood() -> Optional[dict]:
     return None
 
 
-def get_latest_weight() -> Optional[dict]:
+def get_latest_weight() -> dict | None:
     """Scan back up to 30 days for the most recent weight entry."""
     for i in range(30):
         d = date.today() - timedelta(days=i)
@@ -370,7 +370,7 @@ def get_weight_trend(days: int = 14) -> list[dict]:
     return entries
 
 
-def get_last_workout_info() -> Optional[dict]:
+def get_last_workout_info() -> dict | None:
     """Scan back up to 30 days for the most recent logged workout."""
     for i in range(30):
         d = date.today() - timedelta(days=i)

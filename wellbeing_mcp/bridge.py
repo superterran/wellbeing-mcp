@@ -11,11 +11,12 @@ Parsed metrics are written directly to markdown daily notes via daily.py.
 
 import logging
 from datetime import date, datetime
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+
 import uvicorn
-from . import db
-from . import daily
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from . import daily, db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("wellbeing-bridge")
@@ -163,7 +164,6 @@ async def receive_health_data(request: Request):
 @app.get("/status")
 async def status():
     """Health check — returns latest weight and last workout."""
-    profile = db.get_profile()
     return {
         "status": "ok",
         "latest_weight": daily.get_latest_weight(),

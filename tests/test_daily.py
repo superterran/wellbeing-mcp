@@ -1,8 +1,9 @@
 """Tests for wellbeing_mcp.daily — markdown-first data layer."""
 
-import pytest
 from datetime import date, timedelta
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -169,7 +170,7 @@ def test_personal_notes_preserved_on_update(isolated_vault):
     d.log_weight(280.0)
 
     # Manually append personal notes
-    from wellbeing_mcp.daily import _daily_path, PERSONAL_NOTES_HEADER
+    from wellbeing_mcp.daily import PERSONAL_NOTES_HEADER, _daily_path
     path = _daily_path(TODAY)
     existing = path.read_text()
     path.write_text(existing + f"\n{PERSONAL_NOTES_HEADER}\nRemember the gym bag.\n")

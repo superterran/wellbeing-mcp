@@ -9,10 +9,9 @@ The vault watcher (obsidian-vault-watcher.service) picks up changes and
 auto-commits/pushes. Obsidian Sync propagates to all devices.
 """
 
-from pathlib import Path
-from datetime import date, datetime
-from typing import Optional
 import re
+from datetime import date
+from pathlib import Path
 
 VAULT_ROOT = Path.home() / "Documents" / "Cloud Vault"
 WELLBEING_DIR = VAULT_ROOT / "Well-being"
@@ -59,9 +58,9 @@ def write_routine(content: str) -> str:
 def write_workout_log(
     session_type: str,
     exercises: list[dict],
-    total_minutes: Optional[int] = None,
+    total_minutes: int | None = None,
     notes: str = "",
-    session_date: Optional[date] = None,
+    session_date: date | None = None,
 ) -> str:
     """
     Write a completed workout session to the vault.
@@ -135,11 +134,11 @@ tags: [well-being, workout, {session_type}]
 # ---------------------------------------------------------------------------
 
 def write_weekly_review(
-    week_label: Optional[str] = None,
-    weight_entries: Optional[list[dict]] = None,
+    week_label: str | None = None,
+    weight_entries: list[dict] | None = None,
     workout_count: int = 0,
-    avg_calories: Optional[int] = None,
-    mood_avg: Optional[float] = None,
+    avg_calories: int | None = None,
+    mood_avg: float | None = None,
     highlights: str = "",
     challenges: str = "",
     next_week_focus: str = "",
@@ -218,8 +217,8 @@ tags: [well-being, weekly-review, journal]
 def write_monthly_review(
     year: int,
     month: int,
-    weight_start: Optional[float] = None,
-    weight_end: Optional[float] = None,
+    weight_start: float | None = None,
+    weight_end: float | None = None,
     total_workouts: int = 0,
     summary: str = "",
     wins: str = "",

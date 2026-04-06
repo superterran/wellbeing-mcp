@@ -9,11 +9,10 @@ All persistent data lives in markdown daily notes (daily.py).
 SQLite is used only for active gym session state (db.py).
 """
 
+
 from fastmcp import FastMCP
-from typing import Optional
-from . import db
-from . import daily
-from . import vault
+
+from . import daily, db, vault
 from . import workout as wk
 
 mcp = FastMCP(
@@ -67,8 +66,8 @@ def user_profile() -> str:
 
 @mcp.tool()
 def log_mood(
-    score: Optional[int] = None,
-    energy: Optional[int] = None,
+    score: int | None = None,
+    energy: int | None = None,
     note: str = "",
 ) -> str:
     """
@@ -98,8 +97,8 @@ def log_weight(weight_lbs: float) -> str:
 @mcp.tool()
 def log_meal(
     description: str,
-    estimated_calories: Optional[int] = None,
-    estimated_protein_g: Optional[int] = None,
+    estimated_calories: int | None = None,
+    estimated_protein_g: int | None = None,
 ) -> str:
     """
     Log a meal or snack to today's daily note. Describe it naturally.
@@ -152,10 +151,10 @@ def start_gym_session(session_type: str = "") -> str:
 @mcp.tool()
 def log_exercise_set(
     name: str,
-    set_number: Optional[int] = None,
-    reps: Optional[int] = None,
-    weight_lbs: Optional[float] = None,
-    rpe: Optional[int] = None,
+    set_number: int | None = None,
+    reps: int | None = None,
+    weight_lbs: float | None = None,
+    rpe: int | None = None,
     modified: bool = False,
     note: str = "",
 ) -> str:
@@ -342,8 +341,8 @@ def write_monthly_review(
         wins:             Notable wins or achievements.
         focus_next_month: What to prioritize next month.
     """
-    from datetime import date, timedelta
     from calendar import monthrange
+    from datetime import date, timedelta
 
     # First and last weight entries in the month
     _, last_day = monthrange(year, month)

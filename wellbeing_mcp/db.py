@@ -13,11 +13,10 @@ When a gym session finishes, its summary is written to the vault and
 the SQLite rows become historical reference only.
 """
 
-import sqlite3
 import json
-from pathlib import Path
+import sqlite3
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
 
 DATA_DIR = Path.home() / ".local" / "share" / "wellbeing-mcp"
 DB_PATH = DATA_DIR / "wellbeing.db"
@@ -123,7 +122,7 @@ def start_gym_session(session_type: str) -> int:
         return cur.lastrowid
 
 
-def get_active_session() -> Optional[dict]:
+def get_active_session() -> dict | None:
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM gym_session WHERE finished_at IS NULL ORDER BY started_at DESC LIMIT 1"
@@ -149,7 +148,7 @@ def finish_gym_session(session_id: int, notes: str = "", vault_path: str = "") -
     return {"total_minutes": total_minutes}
 
 
-def get_last_gym_session() -> Optional[dict]:
+def get_last_gym_session() -> dict | None:
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM gym_session WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1"
@@ -162,10 +161,10 @@ def get_last_gym_session() -> Optional[dict]:
 def log_exercise(
     session_id: int,
     name: str,
-    set_number: Optional[int] = None,
-    reps: Optional[int] = None,
-    weight_lbs: Optional[float] = None,
-    rpe: Optional[int] = None,
+    set_number: int | None = None,
+    reps: int | None = None,
+    weight_lbs: float | None = None,
+    rpe: int | None = None,
     modified: bool = False,
     note: str = "",
 ) -> int:

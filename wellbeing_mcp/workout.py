@@ -6,7 +6,7 @@ and formats the plan conversationally for gym-floor use.
 """
 
 from datetime import date, datetime
-from typing import Optional
+
 from . import db
 
 # ---------------------------------------------------------------------------

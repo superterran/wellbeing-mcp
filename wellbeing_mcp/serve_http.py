@@ -13,10 +13,12 @@ Set WELLBEING_API_KEY in the environment (sourced from .env).
 """
 
 import os
+
 import uvicorn
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
 from .server import mcp
 
 

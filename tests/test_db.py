@@ -1,7 +1,8 @@
 """Tests for wellbeing_mcp.db — gym session state only."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
