@@ -31,7 +31,7 @@ EQUIPMENT_REQUIRED: dict[str, str | None] = {
     "pec deck": "pec_deck",
     "lateral raise": "dumbbells",
     "goblet squat": "dumbbells",
-    "pushups (knees)": None,   # bodyweight
+    "pushups (knees)": None,  # bodyweight
     "situps / crunches": None,
     "plank": None,
 }
@@ -86,8 +86,14 @@ EQUIPMENT_SUBS: dict[str, list[tuple[str, str]]] = {
 
 # Exercises flagged as shoulder-risky (right shoulder tendon)
 SHOULDER_RISKY = {
-    "machine bench press", "bench press", "pec deck", "lateral raise",
-    "lateral raises", "overhead press", "shoulder press", "dumbbell press",
+    "machine bench press",
+    "bench press",
+    "pec deck",
+    "lateral raise",
+    "lateral raises",
+    "overhead press",
+    "shoulder press",
+    "dumbbell press",
 }
 
 # Substitutions when shoulder is flagged
@@ -103,33 +109,135 @@ ROUTINE = {
     "A-push": {
         "label": "Workout A — Push Focus",
         "exercises": [
-            {"name": "Elliptical", "sets": 1, "reps": None, "weight": None, "note": "20–30 min moderate pace, HR ~120–130 bpm. Priority — do this even if short on time."},
-            {"name": "Machine Bench Press", "sets": 3, "reps": 12, "weight": "30–40 lbs", "note": "Light to start — shoulder test. Stop if any pain."},
-            {"name": "Pec Deck", "sets": 3, "reps": 12, "weight": None, "note": "Controlled squeeze. Skip if shoulder complains."},
-            {"name": "Lateral Raise", "sets": 3, "reps": 12, "weight": "8–10 lbs", "note": "Very light. Skip entirely if shoulder is off."},
-            {"name": "Pushups (knees)", "sets": 3, "reps": 12, "weight": None, "note": "Mat. Good form over speed."},
-            {"name": "Situps / Crunches", "sets": 3, "reps": 20, "weight": None, "note": "Mat. Core endurance."},
-            {"name": "Stair Machine", "sets": 1, "reps": None, "weight": None, "note": "10–15 min finisher, steady climb."},
+            {
+                "name": "Elliptical",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "20–30 min moderate pace, HR ~120–130 bpm. Priority — do this even if short on time.",
+            },
+            {
+                "name": "Machine Bench Press",
+                "sets": 3,
+                "reps": 12,
+                "weight": "30–40 lbs",
+                "note": "Light to start — shoulder test. Stop if any pain.",
+            },
+            {
+                "name": "Pec Deck",
+                "sets": 3,
+                "reps": 12,
+                "weight": None,
+                "note": "Controlled squeeze. Skip if shoulder complains.",
+            },
+            {
+                "name": "Lateral Raise",
+                "sets": 3,
+                "reps": 12,
+                "weight": "8–10 lbs",
+                "note": "Very light. Skip entirely if shoulder is off.",
+            },
+            {
+                "name": "Pushups (knees)",
+                "sets": 3,
+                "reps": 12,
+                "weight": None,
+                "note": "Mat. Good form over speed.",
+            },
+            {
+                "name": "Situps / Crunches",
+                "sets": 3,
+                "reps": 20,
+                "weight": None,
+                "note": "Mat. Core endurance.",
+            },
+            {
+                "name": "Stair Machine",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "10–15 min finisher, steady climb.",
+            },
         ],
     },
     "B-pull-lower": {
         "label": "Workout B — Pull + Lower Focus",
         "exercises": [
-            {"name": "Elliptical", "sets": 1, "reps": None, "weight": None, "note": "20 min warmup, moderate pace."},
-            {"name": "Assisted Pull-Up Machine", "sets": 3, "reps": 10, "weight": None, "note": "Controlled descent. No shoulder pain expected here."},
-            {"name": "Single-Arm Dumbbell Row", "sets": 3, "reps": 12, "weight": "35 lbs", "note": "Bench at 30° angle. This is shoulder-safe — elbow stays tucked."},
-            {"name": "Leg Press", "sets": 3, "reps": 15, "weight": None, "note": "Moderate resistance. Push through heels."},
-            {"name": "Machine-Assisted Squats", "sets": 3, "reps": 15, "weight": "70–80 lbs", "note": "Lower than previous weight — we're coming back fresh."},
-            {"name": "Plank", "sets": 3, "reps": None, "weight": None, "note": "30s hold. Core stability."},
-            {"name": "Stair Machine", "sets": 1, "reps": None, "weight": None, "note": "10 min finisher."},
+            {
+                "name": "Elliptical",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "20 min warmup, moderate pace.",
+            },
+            {
+                "name": "Assisted Pull-Up Machine",
+                "sets": 3,
+                "reps": 10,
+                "weight": None,
+                "note": "Controlled descent. No shoulder pain expected here.",
+            },
+            {
+                "name": "Single-Arm Dumbbell Row",
+                "sets": 3,
+                "reps": 12,
+                "weight": "35 lbs",
+                "note": "Bench at 30° angle. This is shoulder-safe — elbow stays tucked.",
+            },
+            {
+                "name": "Leg Press",
+                "sets": 3,
+                "reps": 15,
+                "weight": None,
+                "note": "Moderate resistance. Push through heels.",
+            },
+            {
+                "name": "Machine-Assisted Squats",
+                "sets": 3,
+                "reps": 15,
+                "weight": "70–80 lbs",
+                "note": "Lower than previous weight — we're coming back fresh.",
+            },
+            {
+                "name": "Plank",
+                "sets": 3,
+                "reps": None,
+                "weight": None,
+                "note": "30s hold. Core stability.",
+            },
+            {
+                "name": "Stair Machine",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "10 min finisher.",
+            },
         ],
     },
     "cardio": {
         "label": "Cardio Day",
         "exercises": [
-            {"name": "Elliptical", "sets": 1, "reps": None, "weight": None, "note": "30–40 min. This is the one. Intervals optional: 1 min hard / 1 min easy."},
-            {"name": "Rowing Machine", "sets": 1, "reps": None, "weight": None, "note": "5–10 min, full-range controlled strokes."},
-            {"name": "Stair Machine", "sets": 1, "reps": None, "weight": None, "note": "10 min steady finisher."},
+            {
+                "name": "Elliptical",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "30–40 min. This is the one. Intervals optional: 1 min hard / 1 min easy.",
+            },
+            {
+                "name": "Rowing Machine",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "5–10 min, full-range controlled strokes.",
+            },
+            {
+                "name": "Stair Machine",
+                "sets": 1,
+                "reps": None,
+                "weight": None,
+                "note": "10 min steady finisher.",
+            },
         ],
     },
 }
@@ -138,6 +246,7 @@ ROUTINE = {
 # ---------------------------------------------------------------------------
 # Session type determination
 # ---------------------------------------------------------------------------
+
 
 def determine_session_type() -> tuple[str, str]:
     """
@@ -161,7 +270,10 @@ def determine_session_type() -> tuple[str, str]:
         days_since = 99
 
     if days_since >= 7:
-        return "cardio", f"It's been {days_since} days since your last session. Starting with cardio."
+        return (
+            "cardio",
+            f"It's been {days_since} days since your last session. Starting with cardio.",
+        )
 
     if last_type == "A-push":
         return "B-pull-lower", "Last session was A (push). Today: B (pull + lower)."
@@ -177,6 +289,7 @@ def determine_session_type() -> tuple[str, str]:
 # Plan formatting
 # ---------------------------------------------------------------------------
 
+
 def _apply_shoulder_mods(exercises: list[dict], shoulder_ok: bool) -> list[dict]:
     """Apply shoulder modifications if needed. Returns modified exercise list."""
     result = []
@@ -185,10 +298,24 @@ def _apply_shoulder_mods(exercises: list[dict], shoulder_ok: bool) -> list[dict]
         if not shoulder_ok and name_lower in SHOULDER_RISKY:
             if name_lower in SHOULDER_SUBS:
                 sub_name, sub_note = SHOULDER_SUBS[name_lower]
-                result.append({**ex, "name": sub_name, "note": f"[SUB for {ex['name']}] {sub_note}", "modified": True})
+                result.append(
+                    {
+                        **ex,
+                        "name": sub_name,
+                        "note": f"[SUB for {ex['name']}] {sub_note}",
+                        "modified": True,
+                    }
+                )
             else:
                 # Skip entirely
-                result.append({**ex, "note": f"⚠️ SKIPPED — shoulder. Original: {ex['note']}", "modified": True, "skip": True})
+                result.append(
+                    {
+                        **ex,
+                        "note": f"⚠️ SKIPPED — shoulder. Original: {ex['note']}",
+                        "modified": True,
+                        "skip": True,
+                    }
+                )
         else:
             result.append({**ex, "modified": False})
     return result
@@ -222,11 +349,15 @@ def format_plan_for_conversation(plan: dict, rationale: str = "", days_since_las
         lines.append("")
 
     if days_since_last >= 7:
-        lines.append(f"> Coming back after {days_since_last} days off. Weights are dialed back — form over load today.")
+        lines.append(
+            f"> Coming back after {days_since_last} days off. Weights are dialed back — form over load today."
+        )
         lines.append("")
 
     if plan.get("shoulder_modified"):
-        lines.append("> ⚠️ Shoulder modifications applied. Flagged exercises have been substituted or removed.")
+        lines.append(
+            "> ⚠️ Shoulder modifications applied. Flagged exercises have been substituted or removed."
+        )
         lines.append("")
 
     lines.append("### Exercises")
@@ -249,7 +380,9 @@ def format_plan_for_conversation(plan: dict, rationale: str = "", days_since_las
 
     lines.append("---")
     lines.append("Tell me when you're done with each exercise and I'll log it and move you along.")
-    lines.append("Say **'done'**, **'skip'**, or give me the actual weight/reps if different from the plan.")
+    lines.append(
+        "Say **'done'**, **'skip'**, or give me the actual weight/reps if different from the plan."
+    )
 
     return "\n".join(lines)
 
@@ -295,6 +428,7 @@ def summarize_session(session_id: int) -> str:
 # Equipment-aware planning
 # ---------------------------------------------------------------------------
 
+
 def apply_equipment_mods(exercises: list[dict], unavailable: list[str]) -> list[dict]:
     """
     Substitute or skip exercises whose required equipment is listed as unavailable.
@@ -311,19 +445,23 @@ def apply_equipment_mods(exercises: list[dict], unavailable: list[str]) -> list[
             subs = EQUIPMENT_SUBS.get(name_lower, [])
             if subs:
                 sub_name, sub_note = subs[0]
-                result.append({
-                    **ex,
-                    "name": sub_name,
-                    "note": f"[SUB — {ex['name']} unavailable] {sub_note}",
-                    "modified": True,
-                })
+                result.append(
+                    {
+                        **ex,
+                        "name": sub_name,
+                        "note": f"[SUB — {ex['name']} unavailable] {sub_note}",
+                        "modified": True,
+                    }
+                )
             else:
-                result.append({
-                    **ex,
-                    "note": f"⚠️ SKIPPED — {ex['name']} equipment unavailable. {ex.get('note', '')}",
-                    "modified": True,
-                    "skip": True,
-                })
+                result.append(
+                    {
+                        **ex,
+                        "note": f"⚠️ SKIPPED — {ex['name']} equipment unavailable. {ex.get('note', '')}",
+                        "modified": True,
+                        "skip": True,
+                    }
+                )
         else:
             result.append(ex)
     return result

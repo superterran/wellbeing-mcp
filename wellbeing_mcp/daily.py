@@ -30,6 +30,7 @@ PERSONAL_NOTES_HEADER = "## Personal Notes"
 # Frontmatter parsing
 # ---------------------------------------------------------------------------
 
+
 def _parse(text: str) -> tuple[dict, str]:
     """Split a note into (frontmatter_dict, personal_notes_text)."""
     fm: dict = {}
@@ -95,7 +96,10 @@ def _render(fm: dict, personal_notes: str = "") -> str:
             meal_lines.append(f"- {t} — {desc} (~{cal} cal{prot_str})")
         remaining = calorie_target - calories_total
         remaining_str = f"{remaining} remaining" if remaining >= 0 else f"{abs(remaining)} over"
-        meals_body = "\n".join(meal_lines) + f"\n\n**{calories_total} / {calorie_target} cal | {remaining_str}**"
+        meals_body = (
+            "\n".join(meal_lines)
+            + f"\n\n**{calories_total} / {calorie_target} cal | {remaining_str}**"
+        )
     else:
         meals_body = f"_nothing logged_ | target: {calorie_target} cal"
 
@@ -165,6 +169,7 @@ def _render(fm: dict, personal_notes: str = "") -> str:
 # Read / write
 # ---------------------------------------------------------------------------
 
+
 def _daily_path(d: date) -> Path:
     return DAILY_DIR / f"{d.isoformat()}.md"
 
@@ -219,6 +224,7 @@ def _load_or_create(d: date) -> tuple[dict, str]:
 # ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
+
 
 def log_weight(weight_lbs: float, d: date | None = None) -> str:
     d = d or date.today()
@@ -329,6 +335,7 @@ def log_apple_health_metrics(
 # Query helpers
 # ---------------------------------------------------------------------------
 
+
 def get_calories_today() -> int:
     fm, _ = read_daily(date.today())
     return fm.get("calories_total", 0) or 0
@@ -394,17 +401,20 @@ def get_workouts_this_week() -> list[dict]:
         d = monday + timedelta(days=i)
         fm, _ = read_daily(d)
         if fm.get("workout_type"):
-            entries.append({
-                "date": str(d),
-                "workout_type": fm["workout_type"],
-                "workout_minutes": fm.get("workout_minutes"),
-            })
+            entries.append(
+                {
+                    "date": str(d),
+                    "workout_type": fm["workout_type"],
+                    "workout_minutes": fm.get("workout_minutes"),
+                }
+            )
     return entries
 
 
 # ---------------------------------------------------------------------------
 # Snapshot (used by wellbeing://current resource)
 # ---------------------------------------------------------------------------
+
 
 def build_current_snapshot(profile: dict) -> str:
     today = date.today().isoformat()

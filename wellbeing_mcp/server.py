@@ -9,20 +9,22 @@ All persistent data lives in markdown daily notes (daily.py).
 SQLite is used only for active gym session state (db.py).
 """
 
-
 from fastmcp import FastMCP
 
 from . import daily, db, vault
 from . import workout as wk
 
+_DEFAULT_INSTRUCTIONS = (
+    "Wellbeing and coaching server for Doug. "
+    "Always read wellbeing://current at session start for today's snapshot. "
+    "For gym sessions, read wellbeing://gym-session and use the 'coach' prompt. "
+    "Read wellbeing://coach-agent at the start of any coaching or gym session to load the coach persona. "
+    "Log exercises conversationally as they're reported — don't make the user fill out forms."
+)
+
 mcp = FastMCP(
     "wellbeing",
-    instructions=(
-        "Wellbeing and coaching server for Doug. "
-        "Always read wellbeing://current at session start for today's snapshot. "
-        "For gym sessions, read wellbeing://gym-session and use the 'coach' prompt. "
-        "Log exercises conversationally as they're reported — don't make the user fill out forms."
-    ),
+    instructions=vault.read_skill_metadata() or _DEFAULT_INSTRUCTIONS,
 )
 
 db.init_db()
@@ -31,6 +33,7 @@ db.init_db()
 # ---------------------------------------------------------------------------
 # Resources: auto-loaded context
 # ---------------------------------------------------------------------------
+
 
 @mcp.resource("wellbeing://current")
 def current_state() -> str:
@@ -61,6 +64,23 @@ def user_profile() -> str:
     return "\n".join(lines)
 
 
+@mcp.resource("wellbeing://coach-agent")
+def coach_agent_profile() -> str:
+    """Coach Agent persona — tone, behaviors, and emotional coaching style.
+
+    Loaded from ``Context/Coach Agent.md`` in the Obsidian vault so the persona
+    can be tuned by editing that file without touching server code.
+    """
+    content = vault.read_coach_agent()
+    if content:
+        return content
+    return (
+        "Coach Agent: grounded, conversational fitness and wellbeing partner. "
+        "Motivational but not performative. Listen first, fix second. "
+        "Acknowledge dark feelings before redirecting."
+    )
+
+
 @mcp.resource("wellbeing://gym-session")
 def gym_session_state() -> str:
     """Live gym session state — active session, exercises logged, what's next."""
@@ -76,13 +96,16 @@ def gym_session_state() -> str:
     session_id = session["id"]
     session_type = session.get("session_type", "unknown")
     profile = db.get_profile()
-    shoulder_ok = "healed" in profile.get("injury", "").lower() or "fine" in profile.get("injury", "").lower()
+    shoulder_ok = (
+        "healed" in profile.get("injury", "").lower() or "fine" in profile.get("injury", "").lower()
+    )
     return wk.format_session_status(session_id, session_type, shoulder_ok=shoulder_ok)
 
 
 # ---------------------------------------------------------------------------
 # Prompts: coaching persona
 # ---------------------------------------------------------------------------
+
 
 @mcp.prompt()
 def coach() -> str:
@@ -111,11 +134,14 @@ def coach() -> str:
             f"Days since last session: {days_since}."
         )
 
+    coach_persona = vault.read_coach_agent()
+    persona_block = f"\n\n## Coach Persona\n{coach_persona}" if coach_persona else ""
+
     return f"""You are Doug's personal trainer and coach. Here's everything you need:
 
 ## Current State
 {snapshot}
-{session_block}
+{session_block}{persona_block}
 
 ## Your Role
 - Run gym sessions conversationally. Walk him through exercises one at a time.
@@ -127,10 +153,10 @@ def coach() -> str:
 - At the end, call finish_gym_session to write the vault log.
 
 ## Tone
-{profile.get('coaching_tone', 'Direct and practical. No cheerleading.')}
+{profile.get("coaching_tone", "Direct and practical. No cheerleading.")}
 
 ## Injury Awareness
-{profile.get('injury', 'Right shoulder — check before any pressing movement.')}
+{profile.get("injury", "Right shoulder — check before any pressing movement.")}
 Current status: mostly healed, avoid heavy pressing. All pulling and lower body is fine.
 
 ## Rules
@@ -145,6 +171,7 @@ Current status: mostly healed, avoid heavy pressing. All pulling and lower body 
 # ---------------------------------------------------------------------------
 # Tools: daily logging
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 def log_mood(
@@ -199,6 +226,7 @@ def log_meal(
 # ---------------------------------------------------------------------------
 # Tools: gym session (interactive)
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool()
 def get_workout_plan(shoulder_ok: bool = True) -> str:
@@ -255,9 +283,7 @@ def log_exercise_set(
     session = db.get_active_session()
     if not session:
         return "No active session. Call start_gym_session first."
-    db.log_exercise(
-        session["id"], name, set_number, reps, weight_lbs, rpe, modified, note
-    )
+    db.log_exercise(session["id"], name, set_number, reps, weight_lbs, rpe, modified, note)
     parts = [name]
     if set_number:
         parts.append(f"set {set_number}")
@@ -397,6 +423,7 @@ def set_unavailable_equipment(unavailable: list[str], shoulder_ok: bool = True) 
 # Tools: vault / journal
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool()
 def get_routine() -> str:
     """Read the current workout routine from the vault."""
@@ -527,6 +554,7 @@ def write_monthly_review(
 # Tools: retrieval / summary
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool()
 def get_today_summary() -> str:
     """Get today's full wellbeing snapshot."""
@@ -589,6 +617,7 @@ def update_profile_field(field: str, value: str) -> str:
 # Internal: calorie estimation
 # ---------------------------------------------------------------------------
 
+
 def _estimate_calories(description: str) -> int:
     """
     Rough calorie estimation from natural language description.
@@ -598,22 +627,50 @@ def _estimate_calories(description: str) -> int:
 
     estimates = {
         # Proteins
-        "chicken breast": 165, "grilled chicken": 200, "salmon": 230,
-        "steak": 300, "ground beef": 250, "turkey": 180, "eggs": 70,
-        "protein shake": 150, "greek yogurt": 100, "cottage cheese": 110,
+        "chicken breast": 165,
+        "grilled chicken": 200,
+        "salmon": 230,
+        "steak": 300,
+        "ground beef": 250,
+        "turkey": 180,
+        "eggs": 70,
+        "protein shake": 150,
+        "greek yogurt": 100,
+        "cottage cheese": 110,
         # Carbs
-        "rice": 200, "pasta": 220, "bread": 80, "sandwich": 350,
-        "oatmeal": 150, "banana": 90, "apple": 80, "potato": 160,
+        "rice": 200,
+        "pasta": 220,
+        "bread": 80,
+        "sandwich": 350,
+        "oatmeal": 150,
+        "banana": 90,
+        "apple": 80,
+        "potato": 160,
         # Common meals
-        "salad": 120, "caesar salad": 200, "burrito": 500, "burger": 550,
-        "pizza slice": 280, "pizza": 700, "wrap": 350,
-        "soup": 150, "chili": 250,
+        "salad": 120,
+        "caesar salad": 200,
+        "burrito": 500,
+        "burger": 550,
+        "pizza slice": 280,
+        "pizza": 700,
+        "wrap": 350,
+        "soup": 150,
+        "chili": 250,
         # Drinks / snacks
-        "coffee": 5, "latte": 120, "soda": 140, "juice": 110,
-        "protein bar": 200, "granola bar": 190, "chips": 150,
-        "cookie": 80, "handful of nuts": 170, "nuts": 170,
+        "coffee": 5,
+        "latte": 120,
+        "soda": 140,
+        "juice": 110,
+        "protein bar": 200,
+        "granola bar": 190,
+        "chips": 150,
+        "cookie": 80,
+        "handful of nuts": 170,
+        "nuts": 170,
         # Fast food
-        "mcdonald's": 700, "subway": 450, "chipotle": 800,
+        "mcdonald's": 700,
+        "subway": 450,
+        "chipotle": 800,
     }
 
     total = 0

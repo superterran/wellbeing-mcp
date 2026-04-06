@@ -23,6 +23,7 @@ TODAY = date.today()
 
 # --- Weight ---
 
+
 def test_log_weight_creates_note(isolated_vault):
     d = isolated_vault
     result = d.log_weight(279.5)
@@ -63,6 +64,7 @@ def test_weight_trend(isolated_vault):
 
 # --- Mood ---
 
+
 def test_log_mood_score_and_energy(isolated_vault):
     d = isolated_vault
     result = d.log_mood(7, 6)
@@ -92,6 +94,7 @@ def test_get_latest_mood_none_when_empty(isolated_vault):
 
 # --- Meals ---
 
+
 def test_log_meal_tracks_calories(isolated_vault):
     d = isolated_vault
     result = d.log_meal("grilled chicken and rice", 450, protein_g=40)
@@ -117,6 +120,7 @@ def test_log_meal_shows_remaining(isolated_vault):
 
 
 # --- Workout ---
+
 
 def test_log_workout_to_daily(isolated_vault):
     d = isolated_vault
@@ -147,6 +151,7 @@ def test_get_last_workout_none_when_empty(isolated_vault):
 
 # --- Snapshot ---
 
+
 def test_build_current_snapshot_no_data(isolated_vault):
     profile = {"goal_weight_lbs": 250, "calorie_target": 2100}
     snap = isolated_vault.build_current_snapshot(profile)
@@ -164,6 +169,7 @@ def test_build_current_snapshot_with_weight(isolated_vault):
 
 # --- Personal notes preservation ---
 
+
 def test_personal_notes_preserved_on_update(isolated_vault):
     d = isolated_vault
     # First log creates the note
@@ -171,6 +177,7 @@ def test_personal_notes_preserved_on_update(isolated_vault):
 
     # Manually append personal notes
     from wellbeing_mcp.daily import PERSONAL_NOTES_HEADER, _daily_path
+
     path = _daily_path(TODAY)
     existing = path.read_text()
     path.write_text(existing + f"\n{PERSONAL_NOTES_HEADER}\nRemember the gym bag.\n")

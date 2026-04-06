@@ -37,7 +37,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         token_param = request.query_params.get("token", "")
 
         if auth_header.startswith("Bearer "):
-            token = auth_header[len("Bearer "):]
+            token = auth_header[len("Bearer ") :]
         elif token_param:
             token = token_param
         else:

@@ -15,12 +15,43 @@ from pathlib import Path
 
 VAULT_ROOT = Path.home() / "Documents" / "Cloud Vault"
 WELLBEING_DIR = VAULT_ROOT / "Well-being"
+CONTEXT_DIR = VAULT_ROOT / "Context"
 
 JOURNAL_WEEKLY = WELLBEING_DIR / "Journal" / "Weekly"
 JOURNAL_MONTHLY = WELLBEING_DIR / "Journal" / "Monthly"
 WORKOUT_LOG_DIR = WELLBEING_DIR / "Workouts" / "Log"
 ROUTINES_DIR = WELLBEING_DIR / "Workouts" / "Routines"
 CURRENT_ROUTINE_PATH = ROUTINES_DIR / "Current Routine.md"
+
+COACH_AGENT_PATH = CONTEXT_DIR / "Coach Agent.md"
+WELLBEING_SKILL_PATH = CONTEXT_DIR / "skills" / "wellbeing" / "SKILL.md"
+
+
+# ---------------------------------------------------------------------------
+# Context: coach agent and skill metadata (from Obsidian vault)
+# ---------------------------------------------------------------------------
+
+
+def read_coach_agent() -> str:
+    """Read the Coach Agent persona from the vault.
+
+    Returns the content of ``Context/Coach Agent.md`` if it exists, or an
+    empty string when the vault is unavailable (e.g. in CI).
+    """
+    if COACH_AGENT_PATH.exists():
+        return COACH_AGENT_PATH.read_text()
+    return ""
+
+
+def read_skill_metadata() -> str | None:
+    """Read wellbeing skill metadata (server instructions) from the vault.
+
+    Returns the content of ``Context/skills/wellbeing/SKILL.md`` if it exists,
+    or ``None`` when unavailable so callers can fall back to defaults.
+    """
+    if WELLBEING_SKILL_PATH.exists():
+        return WELLBEING_SKILL_PATH.read_text()
+    return None
 
 
 def _ensure_dirs() -> None:
@@ -36,6 +67,7 @@ def _iso_week(d: date) -> str:
 # ---------------------------------------------------------------------------
 # Routine
 # ---------------------------------------------------------------------------
+
 
 def read_routine() -> str:
     """Read the current workout routine from the vault."""
@@ -55,6 +87,7 @@ def write_routine(content: str) -> str:
 # Workout session log
 # ---------------------------------------------------------------------------
 
+
 def write_workout_log(
     session_type: str,
     exercises: list[dict],
@@ -73,8 +106,10 @@ def write_workout_log(
 
     # Build exercise table
     if exercises:
-        ex_lines = ["| Exercise | Sets | Reps | Weight | RPE | Notes |",
-                    "|----------|------|------|--------|-----|-------|"]
+        ex_lines = [
+            "| Exercise | Sets | Reps | Weight | RPE | Notes |",
+            "|----------|------|------|--------|-----|-------|",
+        ]
         last_name = None
         for ex in exercises:
             name = ex.get("name", "")
@@ -132,6 +167,7 @@ tags: [well-being, workout, {session_type}]
 # ---------------------------------------------------------------------------
 # Weekly journal
 # ---------------------------------------------------------------------------
+
 
 def write_weekly_review(
     week_label: str | None = None,
@@ -213,6 +249,7 @@ tags: [well-being, weekly-review, journal]
 # ---------------------------------------------------------------------------
 # Monthly journal
 # ---------------------------------------------------------------------------
+
 
 def write_monthly_review(
     year: int,

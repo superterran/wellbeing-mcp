@@ -125,11 +125,13 @@ def _parse_health_payload(payload: dict) -> dict:
         if workout_type:
             try:
                 daily.log_workout_to_daily(workout_type, duration_min, d=d)
-                ingested.setdefault("workouts", []).append({
-                    "type": workout_type,
-                    "duration_min": duration_min,
-                    "date": str(d),
-                })
+                ingested.setdefault("workouts", []).append(
+                    {
+                        "type": workout_type,
+                        "duration_min": duration_min,
+                        "date": str(d),
+                    }
+                )
             except Exception:
                 logger.exception(f"Failed to log workout for {d}")
 

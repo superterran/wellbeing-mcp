@@ -100,6 +100,7 @@ def init_db() -> None:
 
 # --- Profile ---
 
+
 def get_profile() -> dict:
     if PROFILE_PATH.exists():
         return json.loads(PROFILE_PATH.read_text())
@@ -112,6 +113,7 @@ def save_profile(profile: dict) -> None:
 
 
 # --- Gym sessions ---
+
 
 def start_gym_session(session_type: str) -> int:
     with get_db() as conn:
@@ -132,7 +134,9 @@ def get_active_session() -> dict | None:
 
 def finish_gym_session(session_id: int, notes: str = "", vault_path: str = "") -> dict:
     with get_db() as conn:
-        row = conn.execute("SELECT started_at FROM gym_session WHERE id = ?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT started_at FROM gym_session WHERE id = ?", (session_id,)
+        ).fetchone()
         started = row["started_at"] if row else None
 
     total_minutes = None
@@ -157,6 +161,7 @@ def get_last_gym_session() -> dict | None:
 
 
 # --- Exercise log ---
+
 
 def log_exercise(
     session_id: int,
@@ -188,6 +193,7 @@ def get_session_exercises(session_id: int) -> list[dict]:
 
 
 # --- Apple Health raw storage ---
+
 
 def store_apple_health_raw(payload: dict) -> None:
     with get_db() as conn:

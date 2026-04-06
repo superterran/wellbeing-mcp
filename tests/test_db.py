@@ -24,6 +24,7 @@ def isolated_db(tmp_path):
 
 # --- Profile ---
 
+
 def test_get_default_profile(isolated_db):
     profile = isolated_db.get_profile()
     assert profile["name"] == "Doug"
@@ -41,6 +42,7 @@ def test_save_and_reload_profile(isolated_db):
 
 
 # --- Gym sessions ---
+
 
 def test_start_gym_session_returns_id(isolated_db):
     db = isolated_db
@@ -88,6 +90,7 @@ def test_get_last_gym_session_none_when_empty(isolated_db):
 
 # --- Exercise log ---
 
+
 def test_log_exercise(isolated_db):
     db = isolated_db
     sid = db.start_gym_session("A-push")
@@ -125,6 +128,7 @@ def test_log_exercise_modified_flag(isolated_db):
 
 
 # --- Apple Health raw storage ---
+
 
 def test_store_apple_health_raw(isolated_db):
     db = isolated_db
