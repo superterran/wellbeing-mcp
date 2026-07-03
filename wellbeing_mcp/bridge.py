@@ -32,6 +32,18 @@ app = FastAPI(title="wellbeing-bridge", docs_url=None, redoc_url=None)
 db.init_db()
 
 
+def _require_token(request: Request) -> None:
+    """Reject the request unless the shared secret matches (when configured).
+
+    Left open when BRIDGE_TOKEN is empty (LAN-only / local dev).
+    """
+    if not BRIDGE_TOKEN:
+        return
+    supplied = request.query_params.get("token") or request.headers.get("x-webhook-token", "")
+    if supplied != BRIDGE_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
 def _date_from_str(date_str: str) -> date:
     try:
         return datetime.fromisoformat(date_str[:10]).date()
@@ -185,12 +197,7 @@ async def receive_health_data(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    if BRIDGE_TOKEN:
-        supplied = request.query_params.get("token") or request.headers.get(
-            "x-webhook-token", ""
-        )
-        if supplied != BRIDGE_TOKEN:
-            raise HTTPException(status_code=401, detail="Unauthorized")
+    _require_token(request)
 
     logger.info("Received Health Auto Export payload")
 
@@ -207,8 +214,9 @@ async def receive_health_data(request: Request):
 
 
 @app.get("/status")
-async def status():
+async def status(request: Request):
     """Health check — returns latest weight and last workout."""
+    _require_token(request)
     return {
         "status": "ok",
         "latest_weight": daily.get_latest_weight(),
@@ -218,8 +226,9 @@ async def status():
 
 
 @app.get("/snapshot")
-async def snapshot():
+async def snapshot(request: Request):
     """Return the current wellbeing snapshot as plain text."""
+    _require_token(request)
     profile = db.get_profile()
     return {"snapshot": daily.build_current_snapshot(profile)}
 
