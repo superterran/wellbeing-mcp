@@ -63,6 +63,22 @@ def _latest_by_date(datapoints: list) -> dict[date, float]:
     return by_day
 
 
+def _sum_by_date(datapoints: list) -> dict[date, float]:
+    """Reduce a list of {date, qty} points to a per-day SUM.
+
+    Correct for cumulative metrics (steps, active energy) where HAE sends many
+    intraday points; last-wins would grab a single interval, not the day total.
+    """
+    by_day: dict[date, float] = {}
+    for point in datapoints:
+        qty = point.get("qty")
+        date_str = point.get("date", "")
+        if qty is not None and date_str:
+            d = _date_from_str(date_str)
+            by_day[d] = by_day.get(d, 0.0) + float(qty)
+    return by_day
+
+
 def _extract_sleep_hours(point: dict) -> float | None:
     """Pull total asleep hours from a Health Auto Export sleep_analysis point.
 
@@ -122,13 +138,17 @@ def _parse_health_payload(payload: dict) -> dict:
         "cardio_recovery": "cardio_recovery",
     }
 
+    # Cumulative metrics need a per-day SUM; point-in-time metrics take last-wins.
+    cumulative = {"step_count", "active_energy"}
+
     # Build a per-day dict of {field: value}
     day_metrics: dict[date, dict] = {}
     for metric_name, field in metric_fields.items():
         if metric_name not in metric_map:
             continue
         datapoints, _ = metric_map[metric_name]
-        by_day = _latest_by_date(datapoints)
+        reducer = _sum_by_date if metric_name in cumulative else _latest_by_date
+        by_day = reducer(datapoints)
         for d, qty in by_day.items():
             day_metrics.setdefault(d, {})[field] = qty
 
