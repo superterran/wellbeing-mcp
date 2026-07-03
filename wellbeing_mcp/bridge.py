@@ -10,6 +10,7 @@ Parsed metrics are written directly to markdown daily notes via daily.py.
 """
 
 import logging
+import os
 from datetime import date, datetime
 
 import uvicorn
@@ -20,6 +21,11 @@ from . import daily, db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("wellbeing-bridge")
+
+# Shared secret for the public webhook. When set (it is, in the closet deploy),
+# every POST to /health must present ?token=<value> or an X-Webhook-Token header.
+# Left empty for LAN-only / local dev, where the endpoint stays unauthenticated.
+BRIDGE_TOKEN = os.environ.get("WELLBEING_BRIDGE_TOKEN", "")
 
 app = FastAPI(title="wellbeing-bridge", docs_url=None, redoc_url=None)
 
@@ -43,6 +49,23 @@ def _latest_by_date(datapoints: list) -> dict[date, float]:
             d = _date_from_str(date_str)
             by_day[d] = float(qty)
     return by_day
+
+
+def _extract_sleep_hours(point: dict) -> float | None:
+    """Pull total asleep hours from a Health Auto Export sleep_analysis point.
+
+    HAE's sleep shape has drifted across versions; try the aggregate fields
+    first, fall back to summing stages, then to a bare qty.
+    """
+    for key in ("totalSleep", "asleep"):
+        v = point.get(key)
+        if v is not None:
+            return float(v)
+    stage_vals = [float(point[k]) for k in ("core", "deep", "rem") if point.get(k) is not None]
+    if stage_vals:
+        return round(sum(stage_vals), 2)
+    qty = point.get("qty")
+    return float(qty) if qty is not None else None
 
 
 def _parse_health_payload(payload: dict) -> dict:
@@ -97,6 +120,19 @@ def _parse_health_payload(payload: dict) -> dict:
         for d, qty in by_day.items():
             day_metrics.setdefault(d, {})[field] = qty
 
+    # --- Sleep (Health Auto Export "sleep_analysis") ---
+    if "sleep_analysis" in metric_map:
+        datapoints, _ = metric_map["sleep_analysis"]
+        sleep_by_day: dict[date, float] = {}
+        for point in datapoints:
+            hours = _extract_sleep_hours(point)
+            date_str = point.get("date") or point.get("sleepEnd") or ""
+            if hours is not None and date_str:
+                d = _date_from_str(date_str)
+                sleep_by_day[d] = round(hours, 2)
+        for d, hours in sleep_by_day.items():
+            day_metrics.setdefault(d, {})["sleep_hours"] = hours
+
     for d, fields in day_metrics.items():
         # Convert step_count and active_energy to int
         if "steps" in fields:
@@ -148,6 +184,13 @@ async def receive_health_data(request: Request):
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    if BRIDGE_TOKEN:
+        supplied = request.query_params.get("token") or request.headers.get(
+            "x-webhook-token", ""
+        )
+        if supplied != BRIDGE_TOKEN:
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
     logger.info("Received Health Auto Export payload")
 

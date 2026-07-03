@@ -131,6 +131,8 @@ def _render(fm: dict, personal_notes: str = "") -> str:
         ah_parts.append(f"SpO₂ {fm['blood_oxygen']}%")
     if fm.get("cardio_recovery"):
         ah_parts.append(f"cardio recovery {fm['cardio_recovery']}")
+    if fm.get("sleep_hours"):
+        ah_parts.append(f"{fm['sleep_hours']}h sleep")
     apple_health_body = " | ".join(ah_parts) if ah_parts else "_no data_"
 
     fm_text = yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -205,6 +207,7 @@ def _default_fm(d: date) -> dict:
         "vo2_max": None,
         "blood_oxygen": None,
         "cardio_recovery": None,
+        "sleep_hours": None,
         "tags": ["well-being", "daily"],
     }
 
@@ -310,6 +313,7 @@ def log_apple_health_metrics(
     vo2_max: float | None = None,
     blood_oxygen: float | None = None,
     cardio_recovery: float | None = None,
+    sleep_hours: float | None = None,
 ) -> None:
     """Write Apple Health metrics to the daily note for the given date."""
     d = d or date.today()
@@ -328,6 +332,8 @@ def log_apple_health_metrics(
         fm["blood_oxygen"] = round(blood_oxygen, 1)
     if cardio_recovery is not None:
         fm["cardio_recovery"] = round(cardio_recovery, 1)
+    if sleep_hours is not None:
+        fm["sleep_hours"] = round(sleep_hours, 2)
     _save(d, fm, notes)
 
 
@@ -484,11 +490,16 @@ def build_current_snapshot(profile: dict) -> str:
         ah_parts.append(f"VO₂max {fm_today['vo2_max']}")
     ah_line = " | ".join(ah_parts) if ah_parts else "no data today"
 
+    # Sleep — surfaced on its own line (matters for OSA tracking + recovery)
+    sleep_val = fm_today.get("sleep_hours")
+    sleep_line = f"{sleep_val}h last night" if sleep_val else "not logged"
+
     return f"""[Wellbeing — {today}]
 Weight:    {weight_line}
 Workouts:  {workout_line}
 Calories:  {cal_line}
 Mood:      {mood_line}
+Sleep:     {sleep_line}
 Health:    {ah_line}
 Injury:    Right shoulder tendon — mostly healed, avoid heavy pressing
 Context:   Returning after ~4 weeks off (injury + illness). Elliptical is priority.
