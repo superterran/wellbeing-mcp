@@ -136,10 +136,14 @@ def _parse_health_payload(payload: dict) -> dict:
         "vo2_max": "vo2_max",
         "blood_oxygen_saturation": "blood_oxygen",
         "cardio_recovery": "cardio_recovery",
+        # Move is active_energy above; these two complete the Apple activity rings.
+        # HAE sends one point per exercise-minute / per stand-hour, so both sum.
+        "apple_exercise_time": "exercise_minutes",
+        "apple_stand_hour": "stand_hours",
     }
 
     # Cumulative metrics need a per-day SUM; point-in-time metrics take last-wins.
-    cumulative = {"step_count", "active_energy"}
+    cumulative = {"step_count", "active_energy", "apple_exercise_time", "apple_stand_hour"}
 
     # Build a per-day dict of {field: value}
     day_metrics: dict[date, dict] = {}
@@ -171,6 +175,10 @@ def _parse_health_payload(payload: dict) -> dict:
             fields["steps"] = int(fields["steps"])
         if "active_calories" in fields:
             fields["active_calories"] = int(fields["active_calories"])
+        if "exercise_minutes" in fields:
+            fields["exercise_minutes"] = int(fields["exercise_minutes"])
+        if "stand_hours" in fields:
+            fields["stand_hours"] = int(fields["stand_hours"])
         try:
             daily.log_apple_health_metrics(d=d, **fields)
             ingested.setdefault("health_metrics", []).append({"date": str(d), **fields})
@@ -180,14 +188,14 @@ def _parse_health_payload(payload: dict) -> dict:
     # --- Workouts ---
     workouts = payload.get("data", {}).get("workouts", [])
     for workout in workouts:
-        workout_type = (
-            workout.get("workoutActivityType", "")
-            .replace("HKWorkoutActivityType", "")
-            .lower()
-            .strip()
-        )
+        # HAE's workout shape drifted: current versions send a human-readable
+        # "name" ("Outdoor Cycling") plus "start"/"end". Older ones sent
+        # "workoutActivityType" ("HKWorkoutActivityTypeCycling") plus "startDate".
+        # Accept both, else every workout silently parses to "" and gets dropped.
+        raw_type = workout.get("workoutActivityType") or workout.get("name") or ""
+        workout_type = raw_type.replace("HKWorkoutActivityType", "").lower().strip()
         duration_sec = workout.get("duration")
-        start_str = workout.get("startDate", "")
+        start_str = workout.get("startDate") or workout.get("start") or ""
         d = _date_from_str(start_str) if start_str else date.today()
         duration_min = int(float(duration_sec) / 60) if duration_sec else None
         if workout_type:
