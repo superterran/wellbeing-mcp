@@ -125,6 +125,10 @@ def _render(fm: dict, personal_notes: str = "") -> str:
         ah_parts.append(f"{fm['steps']:,} steps")
     if fm.get("active_calories"):
         ah_parts.append(f"{fm['active_calories']} active cal")
+    if fm.get("exercise_minutes"):
+        ah_parts.append(f"{fm['exercise_minutes']} min exercise")
+    if fm.get("stand_hours"):
+        ah_parts.append(f"{fm['stand_hours']} stand hrs")
     if fm.get("vo2_max"):
         ah_parts.append(f"VO₂max {fm['vo2_max']}")
     if fm.get("blood_oxygen"):
@@ -208,6 +212,8 @@ def _default_fm(d: date) -> dict:
         "blood_oxygen": None,
         "cardio_recovery": None,
         "sleep_hours": None,
+        "exercise_minutes": None,
+        "stand_hours": None,
         "tags": ["well-being", "daily"],
     }
 
@@ -314,6 +320,8 @@ def log_apple_health_metrics(
     blood_oxygen: float | None = None,
     cardio_recovery: float | None = None,
     sleep_hours: float | None = None,
+    exercise_minutes: int | None = None,
+    stand_hours: int | None = None,
 ) -> None:
     """Write Apple Health metrics to the daily note for the given date."""
     d = d or date.today()
@@ -334,6 +342,10 @@ def log_apple_health_metrics(
         fm["cardio_recovery"] = round(cardio_recovery, 1)
     if sleep_hours is not None:
         fm["sleep_hours"] = round(sleep_hours, 2)
+    if exercise_minutes is not None:
+        fm["exercise_minutes"] = int(exercise_minutes)
+    if stand_hours is not None:
+        fm["stand_hours"] = int(stand_hours)
     _save(d, fm, notes)
 
 
@@ -486,6 +498,10 @@ def build_current_snapshot(profile: dict) -> str:
         ah_parts.append(f"{fm_today['steps']:,} steps")
     if fm_today.get("active_calories"):
         ah_parts.append(f"{fm_today['active_calories']} active cal")
+    if fm_today.get("exercise_minutes"):
+        ah_parts.append(f"{fm_today['exercise_minutes']} min exercise")
+    if fm_today.get("stand_hours"):
+        ah_parts.append(f"{fm_today['stand_hours']} stand hrs")
     if fm_today.get("vo2_max"):
         ah_parts.append(f"VO₂max {fm_today['vo2_max']}")
     ah_line = " | ".join(ah_parts) if ah_parts else "no data today"
